@@ -20,11 +20,11 @@ from _corners import dump, load, draw, without_short_tracks, create_cli
 
 # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_video/py_lucas_kanade/py_lucas_kanade.html
 # params for ShiTomasi corner detection
-maxCorners = 1500
+maxCorners = 3000
 minDistance = 7
 max_diff = 0.2
 feature_params = dict(maxCorners=maxCorners,
-                      qualityLevel=0.12,
+                      qualityLevel=0.05,
                       minDistance=minDistance,
                       blockSize=7)
 
