@@ -34,6 +34,7 @@ def init_track_with_known_views(corner_storage: CornerStorage,
 
 def add_points(storage, track, intrinsic_mat, current, i, j):
     pts, ids, _ = triangulate_correspondences(build_correspondences(storage[i], storage[j]), track[i], track[j], intrinsic_mat, params)
+    print(f'new pts count = {len(list(filter(lambda t: current[t] is None, ids)))}')
     return apply(pts, ids, current)
 
 
@@ -45,8 +46,12 @@ def fill_track(N, track):
 
 
 def filter_poses(inliers, current, ids):
+    print(f'inliers count = {len(inliers)}')
+
     for i in ids:
         current[i] = None if i not in inliers else current[i]
+
+    print(f'cloud size = {len(list(filter(lambda t: t is not None, current)))}')
     return current
 
 
@@ -75,6 +80,7 @@ def calculate_matrix(frame, current, intrinsic_mat):
 
 
 def try_update(N, track, poses, intrinsic_mat, storage, i):
+    print(f'Process {i + 1}/{N}')
     poses, track[i] = calculate_matrix(storage[i], poses, intrinsic_mat)
 
     if track[i] is not None:
@@ -92,7 +98,6 @@ def track_(N, track, current, intrinsic_mat, storage):
         updated = False
         with click.progressbar(range(N), label='Process frames', length=N) as progress_bar:
             for i in progress_bar:
-                print(f'Process {i+1}/{N}', end="\r")
                 if track[i] is None:
                     updated = updated or try_update(N, track, current, intrinsic_mat, storage, i)
 
