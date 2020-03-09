@@ -17,7 +17,8 @@ __all__ = [
     'to_opencv_camera_mat3x3',
     'triangulate_correspondences',
     'view_mat3x4_to_pose',
-    'pose_to_view_mat3x4'
+    'pose_to_view_mat3x4',
+    'remove_correspondences_with_ids'
 ]
 
 from collections import namedtuple
@@ -129,7 +130,7 @@ TriangulationParameters = namedtuple(
 )
 
 
-def _remove_correspondences_with_ids(correspondences: Correspondences,
+def remove_correspondences_with_ids(correspondences: Correspondences,
                                      ids_to_remove: np.ndarray) \
         -> Correspondences:
     ids = correspondences.ids.flatten()
