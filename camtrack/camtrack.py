@@ -127,6 +127,7 @@ def initialize(storage, track, intrinsic_mat):
 
     track[0], track[best_idx] = eye3x4(), pose_to_view_mat3x4(best_pose)
 
+    print("best paired idx " + str(best_idx))
     return 0, best_idx
 
 
