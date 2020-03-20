@@ -16,7 +16,7 @@ import click
 from _camtrack import *
 
 params = TriangulationParameters(
-    max_reprojection_error=1.0,
+    max_reprojection_error=2.2,
     min_triangulation_angle_deg=1.0,
     min_depth=0.1
 )
@@ -33,7 +33,12 @@ def init_track_with_known_views(corner_storage: CornerStorage,
 
 
 def add_points(storage, track, intrinsic_mat, current, i, j):
-    pts, ids, _ = triangulate_correspondences(build_correspondences(storage[i], storage[j]), track[i], track[j], intrinsic_mat, params)
+    corr = build_correspondences(storage[i], storage[j])
+    if corr.points_1.size == 0 or corr.points_2.size == 0:
+        return current
+
+    pts, ids, _ = triangulate_correspondences(corr, track[i], track[j], intrinsic_mat, params)
+
     print(f'new pts count = {len(list(filter(lambda t: current[t] is None, ids)))}')
     return apply(pts, ids, current)
 
@@ -104,24 +109,78 @@ def track_(N, track, current, intrinsic_mat, storage):
     return fill_track(N, track), current
 
 
+def validate_mat(corr, mask):
+    _, trust = cv2.findHomography(corr.points_1, corr.points_2, method=cv2.RANSAC, confidence=0.999, ransacReprojThreshold=2.2)
+
+    return np.count_nonzero(mask) >= np.count_nonzero(trust)
+
+
+def initialize(storage, track, intrinsic_mat):
+    best_pose, best_size, best_idx = None, -1, 0
+
+    for i in range(1, len(storage)):
+        print("process frame " + str(i + 1))
+        cur_pose, cur_size = test_frames(intrinsic_mat, storage[0], storage[i])
+        print("size " + str(cur_size))
+        if best_size < cur_size:
+            best_size, best_idx, best_pose = cur_size, i, cur_pose
+
+    track[0], track[best_idx] = eye3x4(), pose_to_view_mat3x4(best_pose)
+
+    print("best paired idx " + str(best_idx))
+    return 0, best_idx
+
+
+def test_frames(intrinsic_mat, fr1, fr2):
+    corr = build_correspondences(fr1, fr2)
+    if corr.points_1.shape[0] < 5:
+        return None, 0
+
+    mat, mask = cv2.findEssentialMat(corr.points_1, corr.points_2, intrinsic_mat, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+    if mat is None or mat.shape != (3, 3) or not validate_mat(corr, mask):
+        return None, 0
+
+    # https://kite.com/python/docs/cv2.decomposeEssentialMat
+    R1, R2, t = cv2.decomposeEssentialMat(mat)
+    poses = [Pose(R1.T, R1.T @ t), Pose(R2.T, R2.T @ t), Pose(R1.T, R1.T @ (-t)), Pose(R2.T, R2.T @ (-t))]
+    best_size, best_idx = -1, 0
+
+    for i, pose in enumerate(poses):
+        points, _, _ = triangulate_correspondences(remove_correspondences_with_ids(corr, np.argwhere(mask == 0)), eye3x4(), pose_to_view_mat3x4(pose), intrinsic_mat, params)
+        if points.shape[0] > best_size:
+            best_size, best_idx = points.shape[0], i
+
+    return poses[best_idx], best_size
+
 def track_and_calc_colors(camera_parameters: CameraParameters,
                           corner_storage: CornerStorage,
                           frame_sequence_path: str,
                           known_view_1: Optional[Tuple[int, Pose]] = None,
                           known_view_2: Optional[Tuple[int, Pose]] = None) \
         -> Tuple[List[Pose], PointCloud]:
-    if known_view_1 is None or known_view_2 is None:
-        raise NotImplementedError()
-
     rgb_sequence = frameseq.read_rgb_f32(frame_sequence_path)
     intrinsic_mat = to_opencv_camera_mat3x3(
         camera_parameters,
         rgb_sequence[0].shape[0]
     )
 
-    track = init_track_with_known_views(corner_storage, known_view_1, known_view_2)
+    known_view_1 = None
+    known_view_2 = None
 
-    poses = add_points(corner_storage, track, intrinsic_mat, [None] * (corner_storage.max_corner_id() + 1), known_view_1[0], known_view_2[0])
+    if known_view_1 is None or known_view_2 is None:
+        track = [None] * len(corner_storage)
+        i, j = initialize(corner_storage, track, intrinsic_mat)
+        poses = add_points(corner_storage, track, intrinsic_mat, [None] * (corner_storage.max_corner_id() + 1),
+                           i, j)
+    else:
+        track = init_track_with_known_views(corner_storage, known_view_1, known_view_2)
+
+        poses = add_points(corner_storage, track, intrinsic_mat, [None] * (corner_storage.max_corner_id() + 1),
+                           known_view_1[0], known_view_2[0])
+
+
+
+
 
     track, poses = track_(len(corner_storage), track, poses, intrinsic_mat, corner_storage)
     point_cloud_builder = PointCloudBuilder(

@@ -20,13 +20,14 @@ from _corners import dump, load, draw, without_short_tracks, create_cli
 
 # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_video/py_lucas_kanade/py_lucas_kanade.html
 # params for ShiTomasi corner detection
-maxCorners = 3000
-minDistance = 7
+maxCorners = 1000
+minDistance = 6
 max_diff = 0.2
+
 feature_params = dict(maxCorners=maxCorners,
-                      qualityLevel=0.05,
+                      qualityLevel=0.15,
                       minDistance=minDistance,
-                      blockSize=7)
+                      blockSize=5)
 
 # Parameters for lucas kanade optical flow
 lk_params = dict(winSize=(15, 15),
